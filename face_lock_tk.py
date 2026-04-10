@@ -27,16 +27,21 @@ import requests
 # ────────────────────────────────────────────────
 # LOGGING CONFIG
 # ────────────────────────────────────────────────
-LOG_FILE = "/home/ps/Downloads/app/attendance_sync.log"
-APPS_SCRIPT_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzKc2SgrRBdFbzt3ZZS1Tl0KRz4sfaFXE3p3hjz94zMYnlo4dAoMrZqO-A4gAKHTxDDtA/exec"  # REPLACE WITH YOUR DEPLOYED GOOGLE APPS SCRIPT WEB APP URL
+LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "system.log")
+APPS_SCRIPT_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzKc2SgrRBdFbzt3ZZS1Tl0KRz4sfaFXE3p3hjz94zMYnlo4dAoMrZqO-A4gAKHTxDDtA/exec"
 
-logger = logging.getLogger("AttendanceLog")
-logger.setLevel(logging.INFO)
-# Standard FileHandler, log rotation will be managed explicitly by daily API push
+logger = logging.getLogger("FaceLockSystem")
+logger.setLevel(logging.DEBUG)
 handler = logging.FileHandler(LOG_FILE)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+formatter = logging.Formatter('%(asctime)s | %(levelname)-8s | %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
+# Also add console handler for critical errors
+console_handler = logging.StreamHandler()
+console_handler.setLevel(logging.WARNING)
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 # ────────────────────────────────────────────────
 # CONFIG
@@ -530,10 +535,8 @@ class FaceAuthApp(tk.Tk):
         self.worker.start()
         
         # Initialize registered users cache in background
-        print("Initializing registered users cache...")
+        logger.info("Initializing registered users cache...")
         threading.Thread(target=self.update_registered_users_cache, daemon=True).start()
-        
-        self.start_ram_logger()
         
         # Start network monitoring thread
         self.start_network_monitor()
@@ -580,29 +583,7 @@ class FaceAuthApp(tk.Tk):
         self._remove_splash_fn = remove_splash
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
-    def start_ram_logger(self):
-        def log_loop():
-            log_file = "ram_log.txt"
-            while True:
-                try:
-                    pid = os.getpid()
-                    with open(f"/proc/{pid}/status", "r") as f:
-                        for line in f:
-                            if line.startswith("VmRSS:"):
-                                parts = line.split()
-                                rss_kb = int(parts[1])
-                                rss_mb = rss_kb / 1024.0
-                                ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                with open(log_file, "a") as lf:
-                                    lf.write(f"[{ts}] RAM Usage: {rss_mb:.2f} MB\n")
-                                break
-                except Exception as e:
-                    print(f"RAM Log Error: {e}")
-                time.sleep(300)
 
-        t = threading.Thread(target=log_loop, daemon=True)
-        t.start()
-    
     def start_network_monitor(self):
         """Monitor network connectivity and sync offline data when connection is restored"""
         def monitor_loop():
@@ -923,33 +904,9 @@ class FaceAuthApp(tk.Tk):
     def perform_admin_entry(self, user):
         # 1. Lock the transition immediately so loop doesn't override
         self.is_transitioning = True
-        print(f"[DEBUG] Admin entry started for {user}")
-        
-        # 2. Cancel any pending "No Face" timeouts
-        if self.no_face_timer_id:
-            self.after_cancel(self.no_face_timer_id)
-            self.no_face_timer_id = None
-
         display_name = user.split('|')[0]
-        self.status_msg = f"HELLO ADMIN: {display_name}"
-        self.status_clr = (0, 255, 0)
-        
-        # 3. Immediately transition to admin frame (reduce delay)
-        print("[DEBUG] Scheduling admin frame transition")
-        if self.pending_admin_entry_id:
-            self.after_cancel(self.pending_admin_entry_id)
-        self.pending_admin_entry_id = self.after(300, lambda: self._complete_admin_entry())
-    
-    def _complete_admin_entry(self):
-        """Complete the admin entry transition"""
-        self.pending_admin_entry_id = None
-        print("[DEBUG] Completing admin entry - deactivating camera and showing admin frame")
-        self.deactivate_camera_mode(go_idle=False)
-        print("[DEBUG] Camera deactivated")
-        self.show_frame("admin")
-        print("[DEBUG] Admin frame shown")
-        # self.update_idletasks()  # Process pending UI events
-        print("[DEBUG] UI update complete")
+        user_id = user.split('|')[1] if '|' in user else 'UNKNOWN'
+        logger.info(f"ADMIN ENTRY | Admin {display_name} ({user_id}) entering system\")\n        # 2. Cancel any pending \"No Face\" timeouts\n        if self.no_face_timer_id:\n            self.after_cancel(self.no_face_timer_id)\n            self.no_face_timer_id = None\n\n        self.status_msg = f\"HELLO ADMIN: {display_name}\"\n        self.status_clr = (0, 255, 0)\n        \n        # 3. Immediately transition to admin frame (reduce delay)\n        if self.pending_admin_entry_id:\n            self.after_cancel(self.pending_admin_entry_id)\n        self.pending_admin_entry_id = self.after(300, lambda: self._complete_admin_entry())\n    \n    def _complete_admin_entry(self):\n        \"\"\"Complete the admin entry transition\"\"\"\n        self.pending_admin_entry_id = None\n        self.deactivate_camera_mode(go_idle=False)\n        self.show_frame(\"admin\")
     
     def perform_member_entry(self, user):
         """Handle member menu access - show their logs directly"""
@@ -962,6 +919,8 @@ class FaceAuthApp(tk.Tk):
             self.no_face_timer_id = None
         
         display_name = user.split('|')[0]
+        user_id = user.split('|')[1] if '|' in user else 'UNKNOWN'
+        logger.info(f"MEMBER ENTRY | Member {display_name} ({user_id}) accessing logs")
         self.status_msg = f"HELLO: {display_name}"
         self.status_clr = (0, 255, 0)
         
@@ -984,6 +943,7 @@ class FaceAuthApp(tk.Tk):
     def on_admin_timeout(self):
         """Handle admin menu timeout - return to main screen"""
         self.admin_timeout_id = None
+        logger.info("ADMIN TIMEOUT | Admin session ended due to inactivity (15 seconds)")
         # Close any open keypad before exiting
         if self.active_keypad:
             try:
@@ -1013,6 +973,7 @@ class FaceAuthApp(tk.Tk):
     def on_member_timeout(self):
         """Handle member viewing timeout - return to main screen"""
         self.member_timeout_id = None
+        logger.info("MEMBER TIMEOUT | Member session ended due to inactivity (15 seconds)")
         self.exit_member_to_main()
     
     def reset_member_timeout_if_needed(self):
@@ -1876,6 +1837,7 @@ class FaceAuthApp(tk.Tk):
             if ans:
                 with open(MASTER_PASSWORD_PATH, "w") as f:
                     f.write(pwd)
+                logger.info("MASTER PASSWORD | Created new master password")
                 messagebox.showinfo("Saved", "Password created successfully!", parent=self.active_keypad)
                 if self.active_keypad:
                     self.active_keypad.grab_release()
@@ -1892,12 +1854,14 @@ class FaceAuthApp(tk.Tk):
                 saved_pwd = f.read().strip()
 
         if pwd == saved_pwd and saved_pwd != "":
+            logger.info("ADMIN LOGIN | Master password verified successfully")
             if self.active_keypad:
                 self.active_keypad.grab_release()
                 self.active_keypad.destroy()
                 self.active_keypad = None
             self.perform_admin_entry("Master Admin|000")
         else:
+            logger.warning("ADMIN LOGIN | Master password verification failed - incorrect password")
             self._master_status_label.config(text="Incorrect Password")
             self._master_pwd_var.set("")
 
