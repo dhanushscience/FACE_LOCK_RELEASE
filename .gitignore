@@ -1,0 +1,9 @@
+__pycache__/
+*.log
+venv/
+known_faces/*
+!known_faces/.keep
+offline_data.json
+registered_users.txt
+superusers.txt
+master_password.txt
