@@ -51,7 +51,7 @@ def perform_update():
 
         # Update dependencies if requirements.txt exists
         if os.path.exists("requirements.txt"):
-            subprocess.run(["pip", "install", "-r", "requirements.txt"], check=True)
+            subprocess.run([os.path.join(APP_DIR, "venv/bin/python3"), "-m", "pip", "install", "-r", "requirements.txt"], check=True)
 
         # Update local version file
         latest = get_latest_version()
