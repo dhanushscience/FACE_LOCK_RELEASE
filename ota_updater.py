@@ -43,6 +43,12 @@ def perform_update():
         # Change to app directory
         os.chdir(APP_DIR)
 
+        # Reset any local changes to avoid merge conflicts
+        logger.info("Resetting local changes before update...")
+        reset_result = subprocess.run(["git", "reset", "--hard", "HEAD"], capture_output=True, text=True, timeout=30)
+        if reset_result.returncode != 0:
+            logger.warning(f"Git reset had issues: {reset_result.stderr}")
+
         # Pull latest changes
         result = subprocess.run(["git", "pull", "origin", "main"], capture_output=True, text=True, timeout=60)
         if result.returncode != 0:
