@@ -28,7 +28,7 @@ import requests
 # LOGGING CONFIG
 # ────────────────────────────────────────────────
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "system.log")
-APPS_SCRIPT_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzKc2SgrRBdFbzt3ZZS1Tl0KRz4sfaFXE3p3hjz94zMYnlo4dAoMrZqO-A4gAKHTxDDtA/exec"
+APPS_SCRIPT_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwWnwwdgud-oVwQZP7Eou50Yn_DnsMHQBDVOwuZDIyETngnbFuCzdbri0K-4BSsXSO76A/exec"
 
 logger = logging.getLogger("FaceLockSystem")
 logger.setLevel(logging.DEBUG)
@@ -58,7 +58,7 @@ REGISTERED_USERS_PATH = "/home/ps/Downloads/app/registered_users.txt"
 OFFLINE_DATA_PATH = "/home/ps/Downloads/app/offline_data.json"
 MASTER_PASSWORD_PATH = "/home/ps/Downloads/app/master_password.txt"
 SERVICE_ACCOUNT_JSON = "/home/ps/Face_rec/service_account.json"
-SHEET_URL = "https://docs.google.com/spreadsheets/d/1TBsw_Lxk2G22GL7-BoG_9NxfKyfPcyGT5m3T42Ef-r4/edit"
+SHEET_URL = "https://docs.google.com/spreadsheets/d/1NuuD5GTKc-PYY2teu_HDyDDBnnldIvSP23ZGfWHxBDE/edit"
 LOGO_PATH = "/home/ps/Downloads/app/Vector.svg"
 
 os.makedirs(KNOWN_FACES_DIR, exist_ok=True)
@@ -340,7 +340,7 @@ class CameraWorker(threading.Thread):
                     time.sleep(0.05)
                     continue
                 
-                frame = cv2.flip(cv2.cvtColor(frame.copy(), cv2.COLOR_RGB2BGR), 0)
+                frame = cv2.flip(cv2.cvtColor(frame.copy(), cv2.COLOR_RGB2BGR), -1)
 
                 with self.frame_lock:
                     self.current_frame = frame.copy()
@@ -354,7 +354,7 @@ class CameraWorker(threading.Thread):
                     encs = face_recognition.face_encodings(rgb_small, locs)
                     user = "Unknown"
                     if encs:
-                        matches = face_recognition.compare_faces(self.known_encodings, encs[0], tolerance=0.35)
+                        matches = face_recognition.compare_faces(self.known_encodings, encs[0], tolerance=0.45)
                         if True in matches:
                             best = np.argmin(face_recognition.face_distance(self.known_encodings, encs[0]))
                             user = self.known_names[best]
@@ -889,25 +889,45 @@ class FaceAuthApp(tk.Tk):
         registered_users = self.get_registered_users_from_cache()
         has_faces = len(self.worker.known_names) > 0 if self.worker else False
         
+        # Allow manual password entry from menu when admin access is needed.
+        self.btn_more.config(text="PWD", bg=COLORS["admin_btn"], activebackground=COLORS["admin_btn"], command=self.handle_pwd_login)
+
         if not registered_users and not has_faces:
-            print("[DEBUG] No registered users found. Prompting for Master Password directly.")
+            logger.info("MENU ACCESS | No users or face database, prompting Master Password")
             self.handle_pwd_login()
-        else:
-            self.activate_camera_mode("ADMIN_CHECK")
-            if os.path.exists(MASTER_PASSWORD_PATH):
-                self.btn_more.config(text="PWD", bg=COLORS["admin_btn"], activebackground=COLORS["admin_btn"], command=self.handle_pwd_login)
-            self.after(500, self.check_admin_manual_fallback)
+            return
+
+        self.activate_camera_mode("ADMIN_CHECK")
 
     def check_admin_manual_fallback(self):
-        pass 
+        pass
+
 
     def perform_admin_entry(self, user):
         # 1. Lock the transition immediately so loop doesn't override
         self.is_transitioning = True
         display_name = user.split('|')[0]
         user_id = user.split('|')[1] if '|' in user else 'UNKNOWN'
-        logger.info(f"ADMIN ENTRY | Admin {display_name} ({user_id}) entering system\")\n        # 2. Cancel any pending \"No Face\" timeouts\n        if self.no_face_timer_id:\n            self.after_cancel(self.no_face_timer_id)\n            self.no_face_timer_id = None\n\n        self.status_msg = f\"HELLO ADMIN: {display_name}\"\n        self.status_clr = (0, 255, 0)\n        \n        # 3. Immediately transition to admin frame (reduce delay)\n        if self.pending_admin_entry_id:\n            self.after_cancel(self.pending_admin_entry_id)\n        self.pending_admin_entry_id = self.after(300, lambda: self._complete_admin_entry())\n    \n    def _complete_admin_entry(self):\n        \"\"\"Complete the admin entry transition\"\"\"\n        self.pending_admin_entry_id = None\n        self.deactivate_camera_mode(go_idle=False)\n        self.show_frame(\"admin\")
-    
+        logger.info(f"ADMIN ENTRY | Admin {display_name} ({user_id}) entering system")
+
+        # 2. Cancel any pending "No Face" timeouts
+        if self.no_face_timer_id:
+            self.after_cancel(self.no_face_timer_id)
+            self.no_face_timer_id = None
+
+        self.status_msg = f"HELLO ADMIN: {display_name}"
+        self.status_clr = (0, 255, 0)
+        
+        # 3. Immediately transition to admin frame (reduce delay)
+        if self.pending_admin_entry_id:
+            self.after_cancel(self.pending_admin_entry_id)
+        self.pending_admin_entry_id = self.after(300, lambda: self._complete_admin_entry())
+
+    def _complete_admin_entry(self):
+        """Complete the admin entry transition"""
+        self.pending_admin_entry_id = None
+        self.deactivate_camera_mode(go_idle=False)
+        self.show_frame("admin")
     def perform_member_entry(self, user):
         """Handle member menu access - show their logs directly"""
         # 1. Lock the transition
@@ -1347,6 +1367,8 @@ class FaceAuthApp(tk.Tk):
                 return
                 
             self.latest_frame = frame.copy()
+            # Flip the display frame 180 degrees so the UI feed matches camera orientation
+            frame = cv2.flip(frame, -1)
             h, w, ch = frame.shape
             
             ts = datetime.now().strftime("%d/%m/%y %H:%M:%S")
