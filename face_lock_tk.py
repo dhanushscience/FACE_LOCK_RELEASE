@@ -3052,11 +3052,32 @@ class FaceAuthApp(tk.Tk):
         w = int(canvas["width"])
         h = int(canvas["height"])
         cx, cy = w // 2, h // 2
-        # Box pointing up
-        canvas.create_rectangle(cx - 6, cy, cx + 6, cy + 8, outline=color, width=2)
-        # Arrow up
-        canvas.create_polygon(cx - 8, cy, cx + 8, cy, cx, cy - 8, fill=color)
-        canvas.create_text(cx, cy+18, text="NEW", fill=color, font=("Segoe UI", 7, "bold"))
+        radius = min(w, h) // 2 - 6
+
+        # Circular sync arrows
+        canvas.create_arc(cx - radius, cy - radius, cx + radius, cy + radius,
+                          start=30, extent=240, style=tk.ARC, outline=color, width=2)
+        canvas.create_arc(cx - radius, cy - radius, cx + radius, cy + radius,
+                          start=210, extent=240, style=tk.ARC, outline=color, width=2)
+
+        # Arrowheads
+        arrow_size = 5
+        # Top-right arrow head
+        x1 = cx + radius * 0.7
+        y1 = cy - radius * 0.7
+        canvas.create_polygon(x1, y1,
+                              x1 - arrow_size, y1 + arrow_size,
+                              x1 + arrow_size, y1 + arrow_size,
+                              fill=color, outline=color)
+        # Bottom-left arrow head
+        x2 = cx - radius * 0.7
+        y2 = cy + radius * 0.7
+        canvas.create_polygon(x2, y2,
+                              x2 + arrow_size, y2 - arrow_size,
+                              x2 - arrow_size, y2 - arrow_size,
+                              fill=color, outline=color)
+
+        canvas.create_text(cx, cy + radius - 2, text="SYNC", fill=color, font=("Segoe UI", 7, "bold"))
 
     def show_feedback(self, success, message, action):
         self.is_transitioning = True
