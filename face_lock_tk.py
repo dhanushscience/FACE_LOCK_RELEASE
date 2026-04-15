@@ -596,6 +596,16 @@ class FaceAuthApp(tk.Tk):
 
     def start_network_monitor(self):
         """Monitor network connectivity and sync offline data when connection is restored"""
+        def check_for_updates_now():
+            try:
+                available, version = ota_updater.check_for_updates()
+                self.update_available = available
+                if available:
+                    self.latest_update_version = version
+                    print(f"OTA update available: {version}")
+            except Exception as e:
+                print(f"Update check failed: {e}")
+
         def monitor_loop():
             global network_connected, offline_queue, sheet
             previous_state = network_connected
@@ -605,18 +615,11 @@ class FaceAuthApp(tk.Tk):
                 try:
                     check_network_connectivity()
                     
-                    # Check for OTA updates every 5 minutes (30 * 10s)
-                    update_check_counter += 1
-                    if update_check_counter >= 30 and network_connected:
-                        available, version = ota_updater.check_for_updates()
-                        self.update_available = available
-                        if available:
-                            self.latest_update_version = version
-                        update_check_counter = 0
-                    
-                    # Check if network just came back online
                     if network_connected and not previous_state:
                         print("Network restored! Starting sync...")
+                        # Immediately check for updates when network returns
+                        check_for_updates_now()
+
                         # Try to reconnect to sheet if needed
                         if sheet is None:
                             try:
@@ -634,6 +637,12 @@ class FaceAuthApp(tk.Tk):
                         # Sync offline data
                         if offline_queue:
                             sync_offline_data()
+
+                    # Check for OTA updates every 5 minutes (30 * 10s) when online
+                    update_check_counter += 1
+                    if update_check_counter >= 30 and network_connected:
+                        check_for_updates_now()
+                        update_check_counter = 0
                     
                     previous_state = network_connected
                     
@@ -642,6 +651,10 @@ class FaceAuthApp(tk.Tk):
                 
                 time.sleep(10)  # Check every 10 seconds
         
+        # Perform an immediate update check on startup if the network is available
+        if check_network_connectivity():
+            check_for_updates_now()
+
         t = threading.Thread(target=monitor_loop, daemon=True)
         t.start()
 
