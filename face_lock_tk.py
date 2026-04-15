@@ -559,6 +559,8 @@ class FaceAuthApp(tk.Tk):
         # Start WiFi auto-reconnect monitor
         self._start_wifi_auto_reconnect()
 
+        # Header removed from global scope
+        
         self.container = tk.Frame(self, bg=COLORS["bg"])
         self.container.pack(fill="both", expand=True)
         if hasattr(self, "_splash_frame") and self._splash_active:
@@ -573,6 +575,8 @@ class FaceAuthApp(tk.Tk):
         self.init_view_logs()
         self.init_edit_page()
         self.init_wifi_panel()
+        
+        # Icons are now drawn in init_admin_menu
 
         # Wait a minimum of 4 seconds so the GIF plays perfectly exactly once (at 66ms/frame defaults), then close
         def remove_splash():
@@ -611,7 +615,6 @@ class FaceAuthApp(tk.Tk):
                         update_check_counter = 0
                     
                     # Check if network just came back online
-                    if network_connected and not previous_state:
                     if network_connected and not previous_state:
                         print("Network restored! Starting sync...")
                         # Try to reconnect to sheet if needed
@@ -1342,12 +1345,12 @@ class FaceAuthApp(tk.Tk):
             if not self.winfo_exists():
                 return
                 
-            # Update update button text
-            if hasattr(self, 'update_btn'):
+            # Update update icon visibility
+            if hasattr(self, 'update_icon_canvas'):
                 if self.update_available:
-                    self.update_btn.config(text=f"UPDATE [{self.latest_update_version}]")
+                    self._draw_update_icon(self.update_icon_canvas, "#f1c40f")
                 else:
-                    self.update_btn.config(text="UPDATE")
+                    self.update_icon_canvas.delete("all")
             
             # If we are transitioning to Admin menu, SKIP all logic updates
             if self.is_transitioning:
@@ -1548,43 +1551,58 @@ class FaceAuthApp(tk.Tk):
         f = tk.Frame(self.container, bg=COLORS["bg"])
         self.frames["admin"] = f
 
-        # ── Header row: title on left, WiFi icon on right ──
-        header_row = tk.Frame(f, bg=COLORS["bg"])
-        header_row.pack(fill="x", pady=(8, 0), padx=8)
-
-        tk.Label(header_row, text="ADMIN PANEL", bg=COLORS["bg"], fg="white",
-                 font=("Segoe UI", 20, "bold")).pack(side="left")
-
-        # Lock icon button for changing Master Password
-        self.lock_icon_canvas = tk.Canvas(header_row, width=40, height=40,
-                                          bg=COLORS["bg"], highlightthickness=0)
-        self.lock_icon_canvas.pack(side="right", padx=2)
-        self._draw_lock_icon(self.lock_icon_canvas, "#e74c3c")
+        self.header_frame = tk.Frame(f, bg=COLORS["bg"])
+        self.header_frame.pack(side="top", fill="x", pady=2, padx=8)
+        
+        self.logo_label = tk.Label(self.header_frame, bg=COLORS["bg"])
+        self.logo_label.pack(side="left")
+        
+        try:
+            import cairosvg
+            import io
+            png_data = cairosvg.svg2png(url=LOGO_PATH, output_width=120, output_height=30)
+            img_src = Image.open(io.BytesIO(png_data))
+            self.header_logo_img = ImageTk.PhotoImage(img_src)
+            self.logo_label.config(image=self.header_logo_img)
+        except Exception as e:
+            print("Logo load error:", e)
+            self.logo_label.config(text="[LOGO]", fg="white", font=("Segoe UI", 16, "bold"))
+            
+        try:
+            current_version = ota_updater.get_current_version()
+            self.version_label = tk.Label(self.header_frame, text=f"v{current_version}", bg=COLORS["bg"], fg="gray", font=("Segoe UI", 10, "bold"))
+            self.version_label.pack(side="left", padx=(8, 0), anchor="center")
+        except Exception as e:
+            print(f"Version label error: {e}")
+            
+        self.lock_icon_canvas = tk.Canvas(self.header_frame, width=30, height=30, bg=COLORS["bg"], highlightthickness=0)
+        self.lock_icon_canvas.pack(side="right", padx=5)
         self.lock_icon_canvas.bind("<Button-1>", lambda e: self._open_master_password_dialog(mode="create"))
-
-        # WiFi icon button (canvas-drawn arcs)
-        self.wifi_icon_canvas = tk.Canvas(header_row, width=40, height=40,
-                                          bg=COLORS["bg"], highlightthickness=0)
-        self.wifi_icon_canvas.pack(side="right", padx=2)
-        self._draw_wifi_icon(self.wifi_icon_canvas, "#2980b9", label=True)
+        
+        self.wifi_icon_canvas = tk.Canvas(self.header_frame, width=30, height=30, bg=COLORS["bg"], highlightthickness=0)
+        self.wifi_icon_canvas.pack(side="right", padx=5)
         self.wifi_icon_canvas.bind("<Button-1>", lambda e: self.show_wifi_panel())
+        
+        self.update_icon_canvas = tk.Canvas(self.header_frame, width=30, height=45, bg=COLORS["bg"], highlightthickness=0)
+        self.update_icon_canvas.pack(side="right", padx=5)
+        self.update_icon_canvas.bind("<Button-1>", lambda e: self.handle_update())
+        
+        self._draw_lock_icon(self.lock_icon_canvas, "#e74c3c")
+        self._draw_wifi_icon(self.wifi_icon_canvas, "#2980b9", label=False)
 
         grid = tk.Frame(f, bg=COLORS["bg"])
-        grid.pack(expand=True, fill="both", padx=10, pady=8)
+        grid.pack(expand=True, fill="both", padx=10, pady=20)
         
         ops = [("REG", lambda: self.go_list("reg")), ("EDIT", lambda: self.go_list("edit")),
-               ("LOGS", lambda: self.go_list("logs")), ("RECAP", lambda: self.go_list("recap")),
-               ("UPDATE", self.handle_update)]
+               ("LOGS", lambda: self.go_list("logs")), ("RECAP", lambda: self.go_list("recap"))]
         
         for i, (txt, func) in enumerate(ops):
             b = tk.Button(grid, text=txt, bg=COLORS["admin_btn"], fg="white", font=FONT_BOLD, bd=0,
                           command=func)
-            b.grid(row=i//2, column=i%2, padx=5, pady=5, sticky="nsew", ipady=20)
-            if txt == "UPDATE":
-                self.update_btn = b
+            b.grid(row=i//2, column=i%2, padx=8, pady=8, sticky="nsew", ipady=20)
         
         grid.columnconfigure(0, weight=1); grid.columnconfigure(1, weight=1)
-        grid.rowconfigure(0, weight=1); grid.rowconfigure(1, weight=1); grid.rowconfigure(2, weight=1)
+        grid.rowconfigure(0, weight=1); grid.rowconfigure(1, weight=1)
         
         bk = tk.Button(f, text="EXIT ADMIN", bg=COLORS["cancel"], fg="white", font=FONT_BOLD, bd=0,
                        command=self.exit_admin_to_main)
@@ -3028,6 +3046,17 @@ class FaceAuthApp(tk.Tk):
         shackle_r = 5
         canvas.create_arc(cx - shackle_r, cy - shackle_r - 2, cx + shackle_r, cy + shackle_r - 2,
                           start=0, extent=180, outline=color, width=2, style=tk.ARC)
+
+    def _draw_update_icon(self, canvas, color):
+        canvas.delete("all")
+        w = int(canvas["width"])
+        h = int(canvas["height"])
+        cx, cy = w // 2, h // 2
+        # Box pointing up
+        canvas.create_rectangle(cx - 6, cy, cx + 6, cy + 8, outline=color, width=2)
+        # Arrow up
+        canvas.create_polygon(cx - 8, cy, cx + 8, cy, cx, cy - 8, fill=color)
+        canvas.create_text(cx, cy+18, text="NEW", fill=color, font=("Segoe UI", 7, "bold"))
 
     def show_feedback(self, success, message, action):
         self.is_transitioning = True

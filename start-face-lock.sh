@@ -1,5 +1,5 @@
 #!/bin/bash
-source /home/ps/Downloads/app/venv/bin/activate
+source /home/ps/Downloads/FACE_LOCK_RELEASE/venv/bin/activate
 # Face Lock Startup Wrapper Script
 
 # Wait for system to be ready
@@ -19,7 +19,7 @@ sudo rm -f /tmp/.X*-lock /tmp/.X11-unix/X* 2>/dev/null
 sudo sh -c "clear > /dev/tty1" 2>/dev/null
 
 # Change to application directory
-cd /home/ps/Downloads/app
+cd /home/ps/Downloads/FACE_LOCK_RELEASE
 
 # Start X server with the application on vt1 (takes over console display)
-exec startx /home/ps/Downloads/app/run_ui.sh -- :0 -br -nocursor vt1
+exec startx /home/ps/Downloads/FACE_LOCK_RELEASE/run_ui.sh -- :0 -br -nocursor vt1

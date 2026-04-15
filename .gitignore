@@ -7,3 +7,8 @@ offline_data.json
 registered_users.txt
 superusers.txt
 master_password.txt
+
+# Antigravity artifacts
+.antigravity*
+.gemini*
+*.tmp

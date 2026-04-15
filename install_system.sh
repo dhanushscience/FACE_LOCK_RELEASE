@@ -21,7 +21,7 @@ chown -R ${SUDO_USER}:${SUDO_USER} .
 echo "================================================="
 echo "2. FIXING PATHS"
 echo "================================================="
-sed -i "s|/home/ps/Downloads/app|$APP_DIR|g" face_lock_tk.py
+sed -i "s|/home/ps/Downloads/FACE_LOCK_RELEASE|$APP_DIR|g" face_lock_tk.py
 sed -i "s|/home/ps/Face_rec/service_account.json|$USER_HOME/Face_rec/service_account.json|g" face_lock_tk.py
 
 echo "================================================="
