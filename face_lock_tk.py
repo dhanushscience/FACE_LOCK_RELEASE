@@ -24,6 +24,8 @@ import cairosvg
 import io
 import requests
 
+import ota_updater  # OTA update module
+
 # ────────────────────────────────────────────────
 # LOGGING CONFIG
 # ────────────────────────────────────────────────
@@ -52,14 +54,14 @@ except ImportError:
     print("Warning: Picamera2 not found. Ensure you are running on Raspberry Pi.")
     Picamera2 = None
 
-KNOWN_FACES_DIR = "/home/ps/Downloads/app/known_faces"
-SUPERUSER_PATH  = "/home/ps/Downloads/app/superusers.txt"
-REGISTERED_USERS_PATH = "/home/ps/Downloads/app/registered_users.txt"
-OFFLINE_DATA_PATH = "/home/ps/Downloads/app/offline_data.json"
-MASTER_PASSWORD_PATH = "/home/ps/Downloads/app/master_password.txt"
+KNOWN_FACES_DIR = "/home/ps/Downloads/FACE_LOCK_RELEASE/known_faces"
+SUPERUSER_PATH  = "/home/ps/Downloads/FACE_LOCK_RELEASE/superusers.txt"
+REGISTERED_USERS_PATH = "/home/ps/Downloads/FACE_LOCK_RELEASE/registered_users.txt"
+OFFLINE_DATA_PATH = "/home/ps/Downloads/FACE_LOCK_RELEASE/offline_data.json"
+MASTER_PASSWORD_PATH = "/home/ps/Downloads/FACE_LOCK_RELEASE/master_password.txt"
 SERVICE_ACCOUNT_JSON = "/home/ps/Face_rec/service_account.json"
 SHEET_URL = "https://docs.google.com/spreadsheets/d/1NuuD5GTKc-PYY2teu_HDyDDBnnldIvSP23ZGfWHxBDE/edit"
-LOGO_PATH = "/home/ps/Downloads/app/Vector.svg"
+LOGO_PATH = "/home/ps/Downloads/FACE_LOCK_RELEASE/Vector.svg"
 
 os.makedirs(KNOWN_FACES_DIR, exist_ok=True)
 
@@ -428,7 +430,7 @@ class FaceAuthApp(tk.Tk):
         
         self._splash_frames = []
         try:
-            gif_path = "/home/ps/Downloads/app/Splash_PS.gif"
+            gif_path = "/home/ps/Downloads/FACE_LOCK_RELEASE/Splash_PS.gif"
             if os.path.exists(gif_path):
                 gif_img = Image.open(gif_path)
                 i = 0
@@ -493,6 +495,10 @@ class FaceAuthApp(tk.Tk):
         
         # Member viewing flag
         self.is_member_viewing = False
+        
+        # OTA update flags
+        self.update_available = False
+        self.latest_update_version = ""
         
         # Cache for recent login actions (to handle immediate logout)
         # Format: {user_id: {'date': date_str, 'time': time_str, 'action': 'LOGIN'}}
@@ -589,12 +595,23 @@ class FaceAuthApp(tk.Tk):
         def monitor_loop():
             global network_connected, offline_queue, sheet
             previous_state = network_connected
+            update_check_counter = 0
             
             while True:
                 try:
                     check_network_connectivity()
                     
+                    # Check for OTA updates every 5 minutes (30 * 10s)
+                    update_check_counter += 1
+                    if update_check_counter >= 30 and network_connected:
+                        available, version = ota_updater.check_for_updates()
+                        self.update_available = available
+                        if available:
+                            self.latest_update_version = version
+                        update_check_counter = 0
+                    
                     # Check if network just came back online
+                    if network_connected and not previous_state:
                     if network_connected and not previous_state:
                         print("Network restored! Starting sync...")
                         # Try to reconnect to sheet if needed
@@ -898,6 +915,37 @@ class FaceAuthApp(tk.Tk):
             return
 
         self.activate_camera_mode("ADMIN_CHECK")
+
+    def handle_update(self):
+        """Handle OTA update button click."""
+        if not self.update_available:
+            messagebox.showinfo("No Updates", "No updates available.")
+            return
+        if messagebox.askyesno("Update Available", f"New version {self.latest_update_version} available. Update now?"):
+            # Disable admin timeout during update
+            self.cancel_admin_timeout()
+            # Pause camera
+            if self.worker:
+                self.worker.pause()
+            # Show progress
+            progress = Toplevel(self)
+            progress.title("Updating...")
+            tk.Label(progress, text="Downloading and applying update...").pack(pady=10)
+            progress.geometry("300x100")
+            progress.grab_set()
+            # Run update in thread
+            def update_thread():
+                success = ota_updater.perform_update()
+                progress.destroy()
+                if success:
+                    messagebox.showinfo("Success", "Update applied. Device will reboot.")
+                    subprocess.run(["sudo", "reboot"], check=True)
+                else:
+                    messagebox.showerror("Error", "Update failed. Check logs.")
+                    if self.worker:
+                        self.worker.resume()
+                    self.start_admin_timeout()  # Re-enable timeout
+            threading.Thread(target=update_thread, daemon=True).start()
 
     def check_admin_manual_fallback(self):
         pass
@@ -1294,6 +1342,13 @@ class FaceAuthApp(tk.Tk):
             if not self.winfo_exists():
                 return
                 
+            # Update update button text
+            if hasattr(self, 'update_btn'):
+                if self.update_available:
+                    self.update_btn.config(text=f"UPDATE [{self.latest_update_version}]")
+                else:
+                    self.update_btn.config(text="UPDATE")
+            
             # If we are transitioning to Admin menu, SKIP all logic updates
             if self.is_transitioning:
                 return  # Don't schedule here - finally block handles rescheduling
@@ -1518,15 +1573,18 @@ class FaceAuthApp(tk.Tk):
         grid.pack(expand=True, fill="both", padx=10, pady=8)
         
         ops = [("REG", lambda: self.go_list("reg")), ("EDIT", lambda: self.go_list("edit")),
-               ("LOGS", lambda: self.go_list("logs")), ("RECAP", lambda: self.go_list("recap"))]
+               ("LOGS", lambda: self.go_list("logs")), ("RECAP", lambda: self.go_list("recap")),
+               ("UPDATE", self.handle_update)]
         
         for i, (txt, func) in enumerate(ops):
             b = tk.Button(grid, text=txt, bg=COLORS["admin_btn"], fg="white", font=FONT_BOLD, bd=0,
                           command=func)
             b.grid(row=i//2, column=i%2, padx=5, pady=5, sticky="nsew", ipady=20)
+            if txt == "UPDATE":
+                self.update_btn = b
         
         grid.columnconfigure(0, weight=1); grid.columnconfigure(1, weight=1)
-        grid.rowconfigure(0, weight=1); grid.rowconfigure(1, weight=1)
+        grid.rowconfigure(0, weight=1); grid.rowconfigure(1, weight=1); grid.rowconfigure(2, weight=1)
         
         bk = tk.Button(f, text="EXIT ADMIN", bg=COLORS["cancel"], fg="white", font=FONT_BOLD, bd=0,
                        command=self.exit_admin_to_main)
