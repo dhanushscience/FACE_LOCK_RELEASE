@@ -6,7 +6,7 @@ from packaging import version  # For version comparison (install via pip)
 
 # Assuming your repo is on GitHub; adjust for private repos
 REPO_URL = "https://github.com/dhanushscience/FACE_LOCK_RELEASE"  # Replace with your actual repo URL
-VERSION_FILE_URL = f"{REPO_URL}/raw/main/version.txt"  # Remote version file
+VERSION_FILE_URL = "https://raw.githubusercontent.com/dhanushscience/FACE_LOCK_RELEASE/main/version.txt"  # Raw URL for version file
 LOCAL_VERSION_FILE = "/home/ps/Downloads/FACE_LOCK_RELEASE/current_version.txt"
 APP_DIR = "/home/ps/Downloads/FACE_LOCK_RELEASE"
 
