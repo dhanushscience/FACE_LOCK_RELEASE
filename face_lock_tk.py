@@ -30,7 +30,7 @@ import ota_updater  # OTA update module
 # LOGGING CONFIG
 # ────────────────────────────────────────────────
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "system.log")
-APPS_SCRIPT_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwWnwwdgud-oVwQZP7Eou50Yn_DnsMHQBDVOwuZDIyETngnbFuCzdbri0K-4BSsXSO76A/exec"
+APPS_SCRIPT_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzJ95vbRTbY6csRN1Fq8zU7WV9vDGIyTOQFQJUQVQ-uJOcZoNPnTmlJzr-5bPnWiIgI/exec"
 
 logger = logging.getLogger("FaceLockSystem")
 logger.setLevel(logging.DEBUG)
