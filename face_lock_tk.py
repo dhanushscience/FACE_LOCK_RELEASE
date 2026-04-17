@@ -27,7 +27,7 @@ import requests
 import ota_updater  # OTA update module
 
 # ────────────────────────────────────────────────
-# LOGGING CONFIG
+# LOGGING CONFIG TEST
 # ────────────────────────────────────────────────
 LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "system.log")
 APPS_SCRIPT_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbzJ95vbRTbY6csRN1Fq8zU7WV9vDGIyTOQFQJUQVQ-uJOcZoNPnTmlJzr-5bPnWiIgI/exec"
